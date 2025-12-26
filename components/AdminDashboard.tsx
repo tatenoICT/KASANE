@@ -1,11 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { Device, LendingRecord, CategoryType } from '../types';
+import { Device, HistoryLog, CategoryType, ActionType } from '../types';
 import { CATEGORIES } from '../constants';
 
 interface AdminDashboardProps {
   devices: Device[];
-  records: LendingRecord[];
+  historyLogs: HistoryLog[];
   onAddDevice: (category: CategoryType, number: string, details: { assetId?: string, phoneNumber?: string, location?: string }) => void;
   onUpdateDevice: (id: string, details: Partial<Device>) => void;
   onDeleteDevice: (id: string) => void;
@@ -22,10 +22,15 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   'Wi-Fi': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path></svg>,
-  'iPad': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>,
-  'iPhone': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2zM9 5h6"></path></svg>,
-  'PC': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>,
-  'その他周辺機器': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+  'iPad': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>,
+  'iPhone': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M9 21h6a2 2 0 002-2V5a2 2 0 00-2-2H9a2 2 0 00-2 2v14a2 2 0 002 2zM10 5h4"></path></svg>,
+  'PC': <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v9m16 0a2 2 0 012 2v1a2 2 0 01-2 2H4a2 2 0 01-2-2v-1a2 2 0 012-2m16 0h-16"></path></svg>,
+  'その他周辺機器': (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <rect x="7" y="2" width="10" height="20" rx="5" strokeWidth="2" />
+      <path d="M12 2v7M7 9h10" strokeWidth="2" />
+    </svg>
+  )
 };
 
 const MultiSegmentDoughnut: React.FC<{ data: { label: string; value: number; color: string }[] }> = ({ data }) => {
@@ -84,14 +89,14 @@ const MultiSegmentDoughnut: React.FC<{ data: { label: string; value: number; col
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
   devices, 
-  records, 
+  historyLogs, 
   onAddDevice, 
   onUpdateDevice,
   onDeleteDevice, 
   onBackToUser 
 }) => {
-  const [activeTab, setActiveTab] = useState<'status' | 'history' | 'manage'>('status');
-  const [manageCategoryTab, setManageCategoryTab] = useState<CategoryType>('Wi-Fi');
+  const [activeTab, setActiveTab] = useState<'status' | 'manage' | 'history'>('status');
+  const [historyFilter, setHistoryFilter] = useState<'all' | ActionType>('all');
   const [editingDevice, setEditingDevice] = useState<Device | null>(null);
   
   const [newDeviceCategory, setNewDeviceCategory] = useState<CategoryType>('Wi-Fi');
@@ -116,6 +121,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     return { total, borrowedTotal, returnedCount, available, borrowedBreakdown };
   }, [devices]);
 
+  const filteredLogs = useMemo(() => {
+    let base = [...historyLogs].reverse();
+    if (historyFilter === 'all') return base;
+    return base.filter(log => log.actionType === historyFilter);
+  }, [historyLogs, historyFilter]);
+
   const handleMakeAvailable = (e: React.MouseEvent, deviceId: string) => {
     e.stopPropagation();
     onUpdateDevice(deviceId, { status: 'available' });
@@ -139,6 +150,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     e.preventDefault();
     if (!editingDevice) return;
     onUpdateDevice(editingDevice.id, {
+      category: editingDevice.category,
       deviceNumber: editingDevice.deviceNumber,
       assetId: editingDevice.assetId,
       phoneNumber: editingDevice.phoneNumber,
@@ -147,16 +159,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setEditingDevice(null);
   };
 
-  const filteredManageDevices = useMemo(() => {
-    return devices.filter(d => d.category === manageCategoryTab);
-  }, [devices, manageCategoryTab]);
+  const getActionBadge = (type: ActionType) => {
+    switch (type) {
+      case 'lending':
+        return <span className="bg-indigo-100 text-indigo-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">利用申請</span>;
+      case 'return':
+        return <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">返却済み</span>;
+      case 'date_change':
+        return <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider">予定変更</span>;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             <span>KASANE 管理者パネル</span>
           </div>
           <h2 className="text-3xl font-black text-slate-900">ダッシュボード</h2>
@@ -214,7 +234,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {(['status', 'history', 'manage'] as const).map(tab => (
+        {(['status', 'manage', 'history'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -224,7 +244,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 : 'bg-white text-slate-500 hover:text-slate-700'
             }`}
           >
-            {tab === 'status' ? '在庫状況' : tab === 'history' ? '貸出履歴' : '端末管理'}
+            {tab === 'status' ? '在庫状況' : tab === 'manage' ? '端末管理' : '貸出返却履歴'}
           </button>
         ))}
       </div>
@@ -279,45 +299,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           <span className="text-[10px] text-green-500 font-bold">-</span>
                         )}
                       </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {activeTab === 'history' && (
-          <div className="p-0">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b border-slate-100">
-                <tr>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">日付</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">社員</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">端末</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">状態</th>
-                  <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">通知先</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {[...records].reverse().map(record => {
-                  const device = devices.find(d => d.id === record.deviceId);
-                  return (
-                    <tr key={record.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 text-sm text-slate-500">{new Date(record.timestamp).toLocaleDateString()}</td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-bold text-slate-900">{record.userName}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">ID: {record.employeeId}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-indigo-600 font-medium">{device?.deviceNumber || '不明'}</td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${record.status === 'active' ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-400'}`}>
-                          {record.status === 'active' ? '貸出中' : '返却済み'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-xs text-slate-400 font-mono">{record.userEmail}</td>
                     </tr>
                   );
                 })}
@@ -397,65 +378,120 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </form>
 
-            <div className="mb-8 flex gap-2 overflow-x-auto pb-2 border-b border-slate-100">
-              {CATEGORIES.map(category => (
-                <button
-                  key={category}
-                  onClick={() => setManageCategoryTab(category)}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                    manageCategoryTab === category 
-                      ? 'bg-blue-600 text-white shadow-md' 
-                      : 'bg-white text-slate-400 hover:text-slate-600'
-                  }`}
-                >
-                  {category}
-                </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {devices.map(device => (
+                <div key={device.id} className="group bg-white border border-slate-100 p-5 rounded-2xl flex flex-col justify-between hover:border-blue-200 hover:shadow-lg transition-all relative">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
+                        {CATEGORY_ICONS[device.category]}
+                        </div>
+                        <div>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{device.category}</p>
+                        <p className="font-bold text-slate-800">{device.deviceNumber}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button 
+                          onClick={() => setEditingDevice({ ...device })}
+                          className="text-slate-300 hover:text-blue-500 p-2 transition-all"
+                          title="編集"
+                      >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                      </button>
+                      <button 
+                          onClick={() => onDeleteDevice(device.id)}
+                          className="text-slate-300 hover:text-rose-500 p-2 transition-all"
+                          title="削除"
+                      >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                  {device.status === 'borrowed' && (
+                    <div className="mt-3 text-[10px] font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100 animate-in fade-in duration-300">
+                      貸出中：{device.currentUser}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
+          </div>
+        )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredManageDevices.length > 0 ? (
-                filteredManageDevices.map(device => (
-                  <div key={device.id} className="group bg-white border border-slate-100 p-5 rounded-2xl flex flex-col justify-between hover:border-blue-200 hover:shadow-lg transition-all relative">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400">
-                          {CATEGORY_ICONS[device.category]}
-                          </div>
-                          <div>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{device.category}</p>
-                          <p className="font-bold text-slate-800">{device.deviceNumber}</p>
-                          </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button 
-                            onClick={() => setEditingDevice({ ...device })}
-                            className="text-slate-300 hover:text-blue-500 p-2 transition-all"
-                            title="編集"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                        </button>
-                        <button 
-                            onClick={() => onDeleteDevice(device.id)}
-                            className="text-slate-300 hover:text-rose-500 p-2 transition-all"
-                            title="削除"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                        </button>
-                      </div>
-                    </div>
-                    {device.status === 'borrowed' && (
-                      <div className="mt-3 text-[10px] font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-lg border border-rose-100 animate-in fade-in duration-300">
-                        貸出中：{device.currentUser}
-                      </div>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <div className="col-span-full py-12 text-center">
-                  <p className="text-slate-400 text-sm font-medium">このカテゴリーに登録されている端末はありません</p>
-                </div>
-              )}
+        {activeTab === 'history' && (
+          <div className="p-0">
+            <div className="flex items-center gap-2 p-6 border-b border-slate-100 bg-slate-50/30 overflow-x-auto">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mr-2 shrink-0">絞り込み:</span>
+              <button
+                onClick={() => setHistoryFilter('all')}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${historyFilter === 'all' ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+              >
+                すべて
+              </button>
+              <button
+                onClick={() => setHistoryFilter('lending')}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${historyFilter === 'lending' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+              >
+                利用申請
+              </button>
+              <button
+                onClick={() => setHistoryFilter('return')}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${historyFilter === 'return' ? 'bg-green-600 text-white shadow-md shadow-green-100' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+              >
+                返却済み
+              </button>
+              <button
+                onClick={() => setHistoryFilter('date_change')}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap ${historyFilter === 'date_change' ? 'bg-amber-600 text-white shadow-md shadow-amber-100' : 'bg-white text-slate-500 hover:bg-slate-100'}`}
+              >
+                予定変更
+              </button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[700px]">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">日時</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">操作</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">端末</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">社員</th>
+                    <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">詳細</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filteredLogs.map(log => (
+                    <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-900">{new Date(log.timestamp).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-slate-400 font-mono uppercase">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {getActionBadge(log.actionType)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-indigo-600 font-black tracking-tight">{log.deviceNumber}</td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-bold text-slate-700">{log.userName}</span>
+                          <span className="text-[10px] text-slate-400">ID: {log.employeeId}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-500 max-w-xs truncate font-medium">
+                        {log.details || '-'}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredLogs.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic">
+                        履歴が見つかりません
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -479,6 +515,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </div>
                 
                 <form onSubmit={handleEditSubmit} className="p-8 space-y-5">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-widest">カテゴリー</label>
+                        <select 
+                          className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all text-slate-700 font-medium appearance-none"
+                          value={editingDevice.category}
+                          onChange={(e) => setEditingDevice({ ...editingDevice, category: e.target.value as CategoryType })}
+                        >
+                          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-widest">端末番号</label>
                         <input

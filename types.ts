@@ -17,6 +17,19 @@ export interface Device {
   location?: string;
 }
 
+export type ActionType = 'lending' | 'return' | 'date_change';
+
+export interface HistoryLog {
+  id: string;
+  deviceId: string;
+  deviceNumber: string;
+  actionType: ActionType;
+  userName: string;
+  employeeId: string;
+  timestamp: number;
+  details?: string; // 例: "返却予定日を 2023-12-01 から 2023-12-05 に変更"
+}
+
 export interface LendingRecord {
   id: string;
   deviceId: string;
@@ -28,7 +41,7 @@ export interface LendingRecord {
   reason: string;
   timestamp: number;
   status: 'active' | 'returned';
-  remindersSent?: string[]; // '1day' or 'overdue'
+  remindersSent?: string[]; // '1day', 'overdue', 'warning'
 }
 
 export interface Staff {

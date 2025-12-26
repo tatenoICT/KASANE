@@ -33,3 +33,15 @@ export const isOverdue = (targetDateStr: string): boolean => {
   today.setHours(0, 0, 0, 0);
   return today.getTime() > targetDate.getTime();
 };
+
+export const isOneWeekOverdue = (targetDateStr: string): boolean => {
+  if (!targetDateStr) return false;
+  const targetDate = new Date(targetDateStr);
+  const today = new Date();
+  targetDate.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  
+  const diffTime = today.getTime() - targetDate.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays >= 7;
+};

@@ -2,10 +2,10 @@
 import { Device, Staff } from './types';
 
 export const STAFF_DIRECTORY: Staff[] = [
+  { id: '3669', name: '辻 大輔', email: 'd.tsuji@amana.jp' },
+  { id: '3700', name: '齋藤 航輝', email: 'kaz.saito@amana.jp' },
   { id: '3738', name: '立野 春華', email: 'h.tateno@amana.jp' },
-  { id: '1001', name: '山田 太郎', email: 't.yamada@example.com' },
-  { id: '1002', name: '佐藤 花子', email: 'h.sato@example.com' },
-  { id: '2020', name: '鈴木 一郎', email: 'i.suzuki@example.com' },
+  { id: '2342', name: '橋間 司', email: 't.hashima@amana.jp' },
 ];
 
 export const INITIAL_DEVICES: Device[] = [
@@ -42,6 +42,24 @@ export const INITIAL_DEVICES: Device[] = [
     location: 'ロッカー03'
   },
   { 
+    id: 'iphone-01', 
+    category: 'iPhone', 
+    deviceNumber: 'IPHONE-001', 
+    status: 'available',
+    lendingCount: 0,
+    assetId: 'PH-001',
+    location: '貸出ロッカー B-1'
+  },
+  { 
+    id: 'iphone-02', 
+    category: 'iPhone', 
+    deviceNumber: 'IPHONE-002', 
+    status: 'available',
+    lendingCount: 0,
+    assetId: 'PH-002',
+    location: '貸出ロッカー B-2'
+  },
+  { 
     id: 'pc-01', 
     category: 'PC', 
     deviceNumber: 'PC-001', 
@@ -49,6 +67,24 @@ export const INITIAL_DEVICES: Device[] = [
     lendingCount: 15,
     assetId: 'PC-001',
     location: '貸出ロッカー C-1'
+  },
+  { 
+    id: 'monitor-01', 
+    category: 'その他周辺機器', 
+    deviceNumber: 'モニター-01', 
+    status: 'available',
+    lendingCount: 0,
+    assetId: 'MON-001',
+    location: '周辺機器棚 A-1'
+  },
+  { 
+    id: 'keyboard-01', 
+    category: 'その他周辺機器', 
+    deviceNumber: 'キーボード-01', 
+    status: 'available',
+    lendingCount: 0,
+    assetId: 'KEY-001',
+    location: '周辺機器棚 A-2'
   },
 ];
 
