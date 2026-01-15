@@ -8,7 +8,7 @@ import LendingModal from './components/LendingModal';
 import EditReturnDateModal from './components/EditReturnDateModal';
 import AdminDashboard from './components/AdminDashboard';
 import LoginScreen from './components/LoginScreen';
-import { isOneBusinessDayBefore, isOneBusinessDayAfter, isOverdue, isOneWeekOverdue } from './utils/dateUtils';
+import { processReminders } from './services/reminderService';
 
 const App: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | null>(null);
@@ -32,7 +32,13 @@ const App: React.FC = () => {
     const savedUser = localStorage.getItem('kasane_logged_user');
     
     if (savedDevices) setDevices(JSON.parse(savedDevices));
-    if (savedRecords) setLendingRecords(JSON.parse(savedRecords));
+    if (savedRecords) {
+      const records = JSON.parse(savedRecords);
+      setLendingRecords(records.map((r: any) => ({
+        ...r,
+        remindersSent: r.remindersSent || []
+      })));
+    }
     if (savedLogs) setHistoryLogs(JSON.parse(savedLogs));
     if (savedIsAdmin === 'true') setIsAdmin(true);
     if (savedUser) setLoggedInUser(JSON.parse(savedUser));
@@ -49,6 +55,19 @@ const App: React.FC = () => {
     localStorage.setItem('kasane_is_admin', isAdmin.toString());
     localStorage.setItem('kasane_logged_user', JSON.stringify(loggedInUser));
   }, [devices, lendingRecords, historyLogs, isAdmin, loggedInUser, isInitialized]);
+
+  // Fix: Add filteredDevices and deviceCounts computed values
+  const filteredDevices = useMemo(() => {
+    if (!selectedCategory) return [];
+    return devices.filter(d => d.category === selectedCategory);
+  }, [devices, selectedCategory]);
+
+  const deviceCounts = useMemo(() => {
+    return {
+      available: filteredDevices.filter(d => d.status === 'available').length,
+      total: filteredDevices.length
+    };
+  }, [filteredDevices]);
 
   const handleLogout = () => {
     setIsAdmin(false);
@@ -71,126 +90,67 @@ const App: React.FC = () => {
   };
 
   /**
-   * 通知管理ロジック
+   * リマインド一括チェック実行
    */
-  useEffect(() => {
-    const checkAndSendReminders = () => {
-      let updated = false;
-      const newRecords = lendingRecords.map(record => {
-        if (record.status !== 'active') return record;
-
-        const sent = record.remindersSent || [];
-        const is1DayBefore = isOneBusinessDayBefore(record.expectedReturnDate);
-        const is1DayAfter = isOneBusinessDayAfter(record.expectedReturnDate);
-
-        let type: '1day_before' | '1day_after' | null = null;
-        
-        if (is1DayBefore && !sent.includes('1day_before')) {
-          type = '1day_before';
-        } else if (is1DayAfter && !sent.includes('1day_after')) {
-          type = '1day_after';
+  const handleRunReminders = async () => {
+    const result = await processReminders(lendingRecords);
+    if (result.sentCount > 0) {
+      setLendingRecords(result.updatedRecords);
+      
+      // 送信履歴をログに追加
+      result.updatedRecords.forEach(record => {
+        // 直近で追加されたリマインドがあるか確認 (簡易的な判定)
+        const oldRecord = lendingRecords.find(r => r.id === record.id);
+        if (oldRecord && oldRecord.remindersSent.length < record.remindersSent.length) {
+          const newType = record.remindersSent[record.remindersSent.length - 1];
+          const device = devices.find(d => d.id === record.deviceId);
+          addHistoryLog(
+            record.deviceId,
+            device?.deviceNumber || '不明',
+            'reminder_sent',
+            record.userName,
+            record.employeeId,
+            `${newType === '1day_before' ? '1営業日前' : '1営業日後'}リマインド送信済`
+          );
         }
-
-        if (type) {
-          const staff = STAFF_DIRECTORY.find(s => s.id === record.employeeId);
-          const email = staff?.email || record.userEmail;
-          
-          let subject = '';
-          let body = '';
-          
-          if (type === '1day_before') {
-            subject = '【KASANE】返却予定日の1営業日前リマインド';
-            body = `お疲れ様です。\nICTです。\n\n返却予定日の1営前となりました。\n返却予定日に返せるよう端末と充電器の確認をしてください。\nまた、ログインした場合は必ずログアウトを行い、ダウンロードしたアプリなどは必ず削除してください。\n※なお返却予定日を延長される場合は返却予定日の変更を行ってください。`;
-          } else if (type === '1day_after') {
-            subject = '【KASANE】至急：返却期限超過のお知らせ（1営業日経過）';
-            body = `お疲れ様です。\nICTです。\n\n返却予定日を1営業日過ぎおります。\nこの後も利用される方が控えておりますので必ず本日中に返却願います。\nなお返却が難しい場合は返却予定日を返却可能な日付に変更してください。`;
-          }
-          
-          // シミュレーション: ブラウザコンソールへ送信ログを出力
-          console.group(`%c[Email Sent: ${type}]`, "color: #4f46e5; font-weight: bold; background: #e0e7ff; padding: 2px 4px; border-radius: 4px;");
-          console.log(`To: ${record.userName} <${email}>`);
-          console.log(`Subject: ${subject}`);
-          console.log(`Message:\n${body}`);
-          console.groupEnd();
-          
-          updated = true;
-          return { ...record, remindersSent: [...sent, type] };
-        }
-        return record;
       });
-
-      if (updated) {
-        setLendingRecords(newRecords);
-      }
-    };
-
-    const timer = setTimeout(checkAndSendReminders, 2000);
-    return () => clearTimeout(timer);
-  }, [lendingRecords]);
-
-  const filteredDevices = useMemo(() => {
-    if (!selectedCategory) return [];
-    return devices.filter(d => d.category === selectedCategory);
-  }, [selectedCategory, devices]);
-
-  const deviceCounts = useMemo(() => {
-    const total = filteredDevices.length;
-    const available = filteredDevices.filter(d => d.status === 'available').length;
-    return { total, available };
-  }, [filteredDevices]);
+      return result.sentCount;
+    }
+    return 0;
+  };
 
   const handleRequestUse = (device: Device) => {
     if (device.status !== 'available') return;
+    if (device.category === 'PC' || device.category === 'その他周辺機器') {
+      window.alert('ICTにて貸出管理をしているので\n利用申請後ICT担当者にお声かけください。');
+    }
     setSelectedDevice(device);
   };
 
   const handleUpdateReturnDate = (deviceId: string, newDate: string) => {
     const device = devices.find(d => d.id === deviceId);
     if (!device) return;
-
     const oldDate = device.returnDate;
-
     setDevices(prev => prev.map(d => d.id === deviceId ? { ...d, returnDate: newDate } : d));
-    
     setLendingRecords(prev => {
       const newRecords = [...prev];
       const recordIndex = [...newRecords].reverse().findIndex(r => r.deviceId === deviceId && r.status === 'active');
       if (recordIndex !== -1) {
         const actualIndex = newRecords.length - 1 - recordIndex;
-        newRecords[actualIndex] = { 
-          ...newRecords[actualIndex], 
-          expectedReturnDate: newDate,
-          remindersSent: [] // 日付が更新されたら通知履歴をリセット
-        };
+        newRecords[actualIndex] = { ...newRecords[actualIndex], expectedReturnDate: newDate };
       }
       return newRecords;
     });
-
-    addHistoryLog(
-      deviceId, 
-      device.deviceNumber, 
-      'date_change', 
-      device.currentUser || '不明', 
-      device.currentEmployeeId || '不明',
-      `返却予定日を ${oldDate || '未設定'} から ${newDate} に変更`
-    );
-
+    addHistoryLog(deviceId, device.deviceNumber, 'date_change', device.currentUser || '不明', device.currentEmployeeId || '不明', `返却予定日を ${oldDate || '未設定'} から ${newDate} に変更`);
     setEditingDateDevice(null);
   };
 
   const handleReturn = (deviceId: string) => {
     const device = devices.find(d => d.id === deviceId);
     if (!device) return;
-
     const performerName = isAdmin ? '管理者' : (loggedInUser?.name || '不明');
     const performerId = isAdmin ? 'ADMIN' : (loggedInUser?.id || '不明');
-
-    setDevices(prev => prev.map(d => 
-      d.id === deviceId 
-        ? { ...d, status: 'returned', currentUser: undefined, currentEmployeeId: undefined, returnDate: undefined } 
-        : d
-    ));
-
+    setDevices(prev => prev.map(d => d.id === deviceId ? { ...d, status: 'returned', currentUser: undefined, currentEmployeeId: undefined, returnDate: undefined } : d));
     setLendingRecords(prev => {
       const newRecords = [...prev];
       const recordIndex = [...newRecords].reverse().findIndex(r => r.deviceId === deviceId && r.status === 'active');
@@ -200,51 +160,29 @@ const App: React.FC = () => {
       }
       return newRecords;
     });
-
-    addHistoryLog(
-      deviceId, 
-      device.deviceNumber, 
-      'return', 
-      performerName, 
-      performerId
-    );
+    addHistoryLog(deviceId, device.deviceNumber, 'return', performerName, performerId);
   };
 
-  const handleLendingSubmit = (data: Omit<LendingRecord, 'id' | 'timestamp' | 'status'>) => {
-    if (!selectedDevice) return;
+  const handleCompleteInspection = (deviceId: string) => {
+    if (!isAdmin) return;
+    const device = devices.find(d => d.id === deviceId);
+    if (!device || device.status !== 'returned') return;
+    setDevices(prev => prev.map(d => d.id === deviceId ? { ...d, status: 'available' } : d));
+    addHistoryLog(deviceId, device.deviceNumber, 'inspection_complete', '管理者', 'ADMIN', '点検完了。利用可能状態へ復帰。');
+  };
 
+  const handleLendingSubmit = (data: Omit<LendingRecord, 'id' | 'timestamp' | 'status' | 'remindersSent'>) => {
+    if (!selectedDevice) return;
     const newRecord: LendingRecord = {
       ...data,
       id: Math.random().toString(36).substr(2, 9),
-      deviceId: selectedDevice.id,
       timestamp: Date.now(),
       status: 'active',
       remindersSent: [],
     };
-
     setLendingRecords(prev => [...prev, newRecord]);
-    setDevices(prev => prev.map(d => 
-      d.id === selectedDevice.id 
-        ? { 
-            ...d, 
-            status: 'borrowed', 
-            currentUser: data.userName, 
-            currentEmployeeId: data.employeeId,
-            returnDate: data.expectedReturnDate, 
-            lendingCount: (d.lendingCount || 0) + 1 
-          } 
-        : d
-    ));
-
-    addHistoryLog(
-      selectedDevice.id, 
-      selectedDevice.deviceNumber, 
-      'lending', 
-      data.userName, 
-      data.employeeId,
-      `返却予定日: ${data.expectedReturnDate}`
-    );
-
+    setDevices(prev => prev.map(d => d.id === selectedDevice.id ? { ...d, status: 'borrowed', currentUser: data.userName, currentEmployeeId: data.employeeId, returnDate: data.expectedReturnDate, lendingCount: (d.lendingCount || 0) + 1 } : d));
+    addHistoryLog(selectedDevice.id, selectedDevice.deviceNumber, 'lending', data.userName, data.employeeId, `返却予定日: ${data.expectedReturnDate}`);
     setSelectedDevice(null);
   };
 
@@ -271,25 +209,24 @@ const App: React.FC = () => {
   };
 
   if (!loggedInUser && !isAdmin) {
-    return <LoginScreen 
-      onUserLogin={(staff) => setLoggedInUser(staff)} 
-      onAdminLogin={() => setIsAdmin(true)} 
-    />;
+    return <LoginScreen onUserLogin={(staff) => setLoggedInUser(staff)} onAdminLogin={() => setIsAdmin(true)} />;
   }
 
   return (
     <div className="min-h-screen pb-20">
       <Header isAdmin={isAdmin} loggedInUser={loggedInUser} onLogout={handleLogout} />
-      
       <main className="max-w-5xl mx-auto py-8">
         {isAdmin ? (
           <AdminDashboard 
             devices={devices}
             historyLogs={historyLogs}
+            lendingRecords={lendingRecords}
             onAddDevice={handleAddDevice}
             onUpdateDevice={handleUpdateDevice}
             onDeleteDevice={handleDeleteDevice}
             onBackToUser={() => setIsAdmin(false)}
+            onCompleteInspection={handleCompleteInspection}
+            onRunReminders={handleRunReminders}
           />
         ) : !selectedCategory ? (
           <>
@@ -301,101 +238,68 @@ const App: React.FC = () => {
           </>
         ) : (
           <div className="px-6 animate-in slide-in-from-right duration-300">
-            <button 
-              onClick={() => setSelectedCategory(null)}
-              className="flex items-center gap-2 text-indigo-600 font-bold mb-6 hover:translate-x-[-4px] transition-transform"
-            >
+            <button onClick={() => setSelectedCategory(null)} className="flex items-center gap-2 text-indigo-600 font-bold mb-6 hover:translate-x-[-4px] transition-transform">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
               戻る
             </button>
-            
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-3xl font-black text-slate-900">{selectedCategory}</h2>
-              <div className="text-right">
-                <div className="bg-slate-100 px-4 py-2 rounded-2xl border border-slate-200 shadow-sm inline-block">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">利用可能 / 登録</span>
-                  <div className="flex items-baseline justify-end gap-1">
-                    <span className="text-2xl font-black text-indigo-600 leading-none">{deviceCounts.available}</span>
-                    <span className="text-slate-300 font-bold leading-none">/</span>
-                    <span className="text-lg font-bold text-slate-500 leading-none">{deviceCounts.total}</span>
-                  </div>
+              <div className="bg-slate-100 px-4 py-2 rounded-2xl border border-slate-200 shadow-sm inline-block">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">利用可能 / 登録</span>
+                <div className="flex items-baseline justify-end gap-1">
+                  <span className="text-2xl font-black text-indigo-600 leading-none">{deviceCounts.available}</span>
+                  <span className="text-slate-300 font-bold leading-none">/</span>
+                  <span className="text-lg font-bold text-slate-500 leading-none">{deviceCounts.total}</span>
                 </div>
               </div>
             </div>
-
             <div className="grid grid-cols-1 gap-4">
               {filteredDevices.map(device => (
                 <div key={device.id} className={`bg-white p-6 rounded-2xl border ${device.status !== 'available' ? 'border-slate-100 opacity-80' : 'border-slate-200 shadow-sm'} flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all hover:shadow-md`}>
                   <div className="flex items-center gap-4">
-                    <div className={`p-4 rounded-xl ${device.status === 'available' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
+                    <div className={`p-4 rounded-xl ${device.status === 'available' ? 'bg-indigo-50 text-indigo-600' : device.status === 'returned' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>
+                      {/* アイコンはそのまま */}
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {selectedCategory === 'Wi-Fi' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path>}
                         {selectedCategory === 'iPad' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>}
                         {selectedCategory === 'iPhone' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M9 21h6a2 2 0 002-2V5a2 2 0 00-2-2H9a2 2 0 00-2 2v14a2 2 0 002 2zM10 5h4"></path>}
                         {selectedCategory === 'PC' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v9m16 0a2 2 0 012 2v1a2 2 0 01-2 2H4a2 2 0 01-2-2v-1a2 2 0 012-2m16 0h-16"></path>}
-                        {selectedCategory === 'その他周辺機器' && (
-                          <g>
-                            <rect x="7" y="2" width="10" height="20" rx="5" strokeWidth="2" />
-                            <path d="M12 2v7M7 9h10" strokeWidth="2" />
-                          </g>
-                        )}
+                        {selectedCategory === 'その他周辺機器' && <g><rect x="7" y="2" width="10" height="20" rx="5" strokeWidth="2" /><path d="M12 2v7M7 9h10" strokeWidth="2" /></g>}
                       </svg>
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h4 className="text-xl font-bold text-slate-800">{device.deviceNumber}</h4>
-                        {device.location && (
-                          <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">
-                            {device.location}
-                          </span>
-                        )}
+                        {device.location && <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">{device.location}</span>}
                       </div>
                       {device.status === 'borrowed' && (
                         <div className="flex flex-col mt-1">
                           <span className="text-sm text-slate-500 font-bold">{device.currentUser}</span>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-xs text-rose-500 font-bold uppercase tracking-wide">返却予定: {device.returnDate}</span>
-                            <button 
-                              onClick={() => setEditingDateDevice(device)}
-                              className="text-slate-300 hover:text-indigo-500 transition-colors p-0.5"
-                              title="返却予定日を編集"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                            </button>
+                            <button onClick={() => setEditingDateDevice(device)} className="text-slate-300 hover:text-indigo-500 transition-colors p-0.5" title="返却予定日を編集"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg></button>
                           </div>
                         </div>
                       )}
                       {device.status === 'returned' && (
-                        <span className="text-sm text-amber-600 font-bold uppercase mt-1 inline-block">返却済み (点検中)</span>
+                        <div className="flex flex-col mt-1">
+                          <span className="text-sm text-amber-600 font-bold uppercase">返却済み (点検中)</span>
+                          <span className="text-[10px] text-slate-400 font-medium italic">管理者が利用可能にするまで申請できません</span>
+                        </div>
                       )}
-                      {device.status === 'available' && (
-                        <span className="text-sm text-green-600 font-bold uppercase mt-1 inline-block">利用可能</span>
-                      )}
+                      {device.status === 'available' && <span className="text-sm text-green-600 font-bold uppercase mt-1 inline-block">利用可能</span>}
                     </div>
                   </div>
-                  
                   <div className="flex gap-3 w-full sm:w-auto">
                     {device.status === 'available' ? (
-                      <button
-                        onClick={() => handleRequestUse(device)}
-                        className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-indigo-200"
-                      >
-                        利用申請
-                      </button>
+                      <button onClick={() => handleRequestUse(device)} className="flex-1 sm:flex-none px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-indigo-200">利用申請</button>
                     ) : device.status === 'borrowed' ? (
-                      <button
-                        onClick={() => handleReturn(device.id)}
-                        className="flex-1 sm:flex-none px-6 py-2.5 bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-600 font-bold rounded-xl transition-all"
-                      >
-                        返却済み
-                      </button>
+                      <button onClick={() => handleReturn(device.id)} className="flex-1 sm:flex-none px-6 py-2.5 bg-white border-2 border-slate-200 hover:border-slate-300 text-slate-600 font-bold rounded-xl transition-all">返却済み</button>
                     ) : (
-                      <button
-                        disabled
-                        className="flex-1 sm:flex-none px-6 py-2.5 bg-slate-50 text-slate-400 border border-slate-200 font-bold rounded-xl transition-all cursor-not-allowed"
-                      >
-                        点検中
-                      </button>
+                      <div className="flex flex-col gap-2 w-full sm:w-auto">
+                        <button disabled className="flex-1 sm:flex-none px-6 py-2.5 bg-slate-50 text-slate-400 border border-slate-200 font-bold rounded-xl transition-all cursor-not-allowed">点検中</button>
+                        {isAdmin && <button onClick={() => handleCompleteInspection(device.id)} className="px-6 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-black rounded-lg transition-all shadow-md animate-pulse">点検完了・利用可能にする</button>}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -404,22 +308,8 @@ const App: React.FC = () => {
           </div>
         )}
       </main>
-      
-      {selectedDevice && (
-        <LendingModal
-          device={selectedDevice}
-          onClose={() => setSelectedDevice(null)}
-          onSubmit={handleLendingSubmit}
-        />
-      )}
-
-      {editingDateDevice && (
-        <EditReturnDateModal
-          device={editingDateDevice}
-          onClose={() => setEditingDateDevice(null)}
-          onSave={(newDate) => handleUpdateReturnDate(editingDateDevice.id, newDate)}
-        />
-      )}
+      {selectedDevice && <LendingModal device={selectedDevice} onClose={() => setSelectedDevice(null)} onSubmit={handleLendingSubmit} />}
+      {editingDateDevice && <EditReturnDateModal device={editingDateDevice} onClose={() => setEditingDateDevice(null)} onSave={(newDate) => handleUpdateReturnDate(editingDateDevice.id, newDate)} />}
     </div>
   );
 };

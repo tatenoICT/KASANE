@@ -17,7 +17,7 @@ export interface Device {
   location?: string;
 }
 
-export type ActionType = 'lending' | 'return' | 'date_change';
+export type ActionType = 'lending' | 'return' | 'date_change' | 'inspection_complete' | 'reminder_sent';
 
 export interface HistoryLog {
   id: string;
@@ -28,6 +28,14 @@ export interface HistoryLog {
   employeeId: string;
   timestamp: number;
   details?: string;
+}
+
+// Added EmailPayload interface for reminder system
+export interface EmailPayload {
+  to: string;
+  subject: string;
+  body: string;
+  type: '1day_before' | '1day_after';
 }
 
 export interface LendingRecord {
@@ -41,17 +49,12 @@ export interface LendingRecord {
   reason: string;
   timestamp: number;
   status: 'active' | 'returned';
-  remindersSent?: string[];
+  // Added to track which reminder emails have been sent
+  remindersSent: ('1day_before' | '1day_after')[];
 }
 
 export interface Staff {
   id: string;
   name: string;
   email: string;
-}
-
-export interface AIAnalysis {
-  sentiment: string;
-  urgency: 'high' | 'normal' | 'low';
-  summary: string;
 }

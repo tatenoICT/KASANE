@@ -6,11 +6,11 @@ import { STAFF_DIRECTORY } from '../constants';
 interface LendingModalProps {
   device: Device;
   onClose: () => void;
-  onSubmit: (record: Omit<LendingRecord, 'id' | 'timestamp' | 'status'>) => void;
+  // Updated to include remindersSent in the Omit list
+  onSubmit: (record: Omit<LendingRecord, 'id' | 'timestamp' | 'status' | 'remindersSent'>) => void;
 }
 
 const LendingModal: React.FC<LendingModalProps> = ({ device, onClose, onSubmit }) => {
-  // Try to find the currently logged user from localStorage to pre-fill
   const savedUserStr = localStorage.getItem('kasane_logged_user');
   const loggedUser: Staff | null = savedUserStr ? JSON.parse(savedUserStr) : null;
 
@@ -31,7 +31,6 @@ const LendingModal: React.FC<LendingModalProps> = ({ device, onClose, onSubmit }
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // 1. バリデーション
     if (!foundStaff) {
       window.alert('有効な社員番号を入力してください');
       return;
@@ -42,25 +41,19 @@ const LendingModal: React.FC<LendingModalProps> = ({ device, onClose, onSubmit }
       return;
     }
 
-    // 2. カテゴリー判定とアラート表示
-    // PC または その他周辺機器 の場合にアラートを表示する
-    const currentCategory = device.category;
-    if (currentCategory === 'PC' || currentCategory === 'その他周辺機器') {
-      // 利用者がOKを押すまで次のコードは実行されません
-      window.alert('ICTが直接管理しているものになります。\n　ICT部門にお声かけください');
-    }
-
-    // 3. 送信処理（alertが表示された場合、OKをクリックした後に実行される）
     setSubmitting(true);
     
     onSubmit({
       ...formData,
       userName: foundStaff.name,
       userEmail: foundStaff.email,
+      deviceId: device.id,
     });
     
     setSubmitting(false);
   };
+
+  const isTargetCategory = device.category === 'PC' || device.category === 'その他周辺機器';
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-2 md:p-4">
@@ -74,6 +67,23 @@ const LendingModal: React.FC<LendingModalProps> = ({ device, onClose, onSubmit }
             <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
+
+        {/* ICT連絡用警告バナー */}
+        {isTargetCategory && (
+          <div className="px-6 md:px-8 pt-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 animate-in slide-in-from-top-2">
+              <div className="text-amber-500 shrink-0 mt-0.5">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="text-xs md:text-sm font-bold text-amber-800 leading-relaxed">
+                ICTにて貸出管理をしているので<br />
+                利用申請後ICT担当者にお声かけください。
+              </p>
+            </div>
+          </div>
+        )}
         
         <div className="px-6 md:px-8 pt-4 md:pt-6 pb-1 md:pb-2 space-y-3">
             <div className="bg-indigo-50/50 p-3 md:p-4 rounded-xl md:rounded-2xl flex items-center gap-3 md:gap-4 border border-indigo-100/50">
@@ -130,6 +140,7 @@ const LendingModal: React.FC<LendingModalProps> = ({ device, onClose, onSubmit }
                 type="date"
                 className="w-full px-4 md:px-5 py-2.5 md:py-3 rounded-xl md:rounded-2xl border border-slate-200 focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600 outline-none transition-all font-medium text-sm md:text-base"
                 value={formData.expectedReturnDate}
+                // Fix: replace setNewDate with setFormData update for expectedReturnDate
                 onChange={(e) => setFormData({ ...formData, expectedReturnDate: e.target.value })}
               />
             </div>
