@@ -27,7 +27,7 @@ export interface HistoryLog {
   userName: string;
   employeeId: string;
   timestamp: number;
-  details?: string; // 例: "返却予定日を 2023-12-01 から 2023-12-05 に変更"
+  details?: string;
 }
 
 export interface LendingRecord {
@@ -41,7 +41,7 @@ export interface LendingRecord {
   reason: string;
   timestamp: number;
   status: 'active' | 'returned';
-  remindersSent?: string[]; // '1day', 'overdue', 'warning'
+  remindersSent?: string[];
 }
 
 export interface Staff {

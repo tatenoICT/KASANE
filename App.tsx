@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { CategoryType, Device, LendingRecord, HistoryLog, ActionType } from './types';
+import { CategoryType, Device, LendingRecord, HistoryLog, ActionType, Staff } from './types';
 import { INITIAL_DEVICES, STAFF_DIRECTORY } from './constants';
 import Header from './components/Header';
 import CategoryGrid from './components/CategoryGrid';
 import LendingModal from './components/LendingModal';
 import EditReturnDateModal from './components/EditReturnDateModal';
 import AdminDashboard from './components/AdminDashboard';
-import { isOneBusinessDayBefore, isOverdue, isOneWeekOverdue } from './utils/dateUtils';
+import LoginScreen from './components/LoginScreen';
+import { isOneBusinessDayBefore, isOneBusinessDayAfter, isOverdue, isOneWeekOverdue } from './utils/dateUtils';
 
 const App: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | null>(null);
@@ -17,29 +18,43 @@ const App: React.FC = () => {
   const [lendingRecords, setLendingRecords] = useState<LendingRecord[]>([]);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
   
-  // Admin state
+  // Auth state
   const [isAdmin, setIsAdmin] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState<Staff | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Initialize records from localStorage
+  // Initialize data from localStorage
   useEffect(() => {
     const savedDevices = localStorage.getItem('kasane_devices');
     const savedRecords = localStorage.getItem('kasane_records');
     const savedLogs = localStorage.getItem('kasane_history_logs');
     const savedIsAdmin = localStorage.getItem('kasane_is_admin');
+    const savedUser = localStorage.getItem('kasane_logged_user');
     
     if (savedDevices) setDevices(JSON.parse(savedDevices));
     if (savedRecords) setLendingRecords(JSON.parse(savedRecords));
     if (savedLogs) setHistoryLogs(JSON.parse(savedLogs));
     if (savedIsAdmin === 'true') setIsAdmin(true);
+    if (savedUser) setLoggedInUser(JSON.parse(savedUser));
+    
+    setIsInitialized(true);
   }, []);
 
   // Save to localStorage
   useEffect(() => {
+    if (!isInitialized) return;
     localStorage.setItem('kasane_devices', JSON.stringify(devices));
     localStorage.setItem('kasane_records', JSON.stringify(lendingRecords));
     localStorage.setItem('kasane_history_logs', JSON.stringify(historyLogs));
     localStorage.setItem('kasane_is_admin', isAdmin.toString());
-  }, [devices, lendingRecords, historyLogs, isAdmin]);
+    localStorage.setItem('kasane_logged_user', JSON.stringify(loggedInUser));
+  }, [devices, lendingRecords, historyLogs, isAdmin, loggedInUser, isInitialized]);
+
+  const handleLogout = () => {
+    setIsAdmin(false);
+    setLoggedInUser(null);
+    setSelectedCategory(null);
+  };
 
   const addHistoryLog = (deviceId: string, deviceNumber: string, actionType: ActionType, userName: string, employeeId: string, details?: string) => {
     const newLog: HistoryLog = {
@@ -64,19 +79,16 @@ const App: React.FC = () => {
       const newRecords = lendingRecords.map(record => {
         if (record.status !== 'active') return record;
 
-        const isWeekOverdue = isOneWeekOverdue(record.expectedReturnDate);
-        const isOverdueItem = isOverdue(record.expectedReturnDate);
-        const isOneDayBefore = isOneBusinessDayBefore(record.expectedReturnDate);
         const sent = record.remindersSent || [];
+        const is1DayBefore = isOneBusinessDayBefore(record.expectedReturnDate);
+        const is1DayAfter = isOneBusinessDayAfter(record.expectedReturnDate);
 
-        let type: 'warning' | 'overdue' | '1day' | null = null;
+        let type: '1day_before' | '1day_after' | null = null;
         
-        if (isWeekOverdue && !sent.includes('warning')) {
-          type = 'warning';
-        } else if (isOverdueItem && !sent.includes('overdue')) {
-          type = 'overdue';
-        } else if (isOneDayBefore && !sent.includes('1day')) {
-          type = '1day';
+        if (is1DayBefore && !sent.includes('1day_before')) {
+          type = '1day_before';
+        } else if (is1DayAfter && !sent.includes('1day_after')) {
+          type = '1day_after';
         }
 
         if (type) {
@@ -86,28 +98,20 @@ const App: React.FC = () => {
           let subject = '';
           let body = '';
           
-          switch(type) {
-            case 'warning':
-              subject = '【KASANE】至急：端末返却の最終警告（1週間超過）';
-              body = `${record.userName} 様、貸出中端末の返却予定日から1週間が経過しています。貸出ステータスが「未返却」のままです。直ちに返却、または管理部へ連絡してください。`;
-              break;
-            case 'overdue':
-              subject = '【KASANE】通知：端末返却期限超過のお知らせ';
-              body = `${record.userName} 様、貸出中端末の返却期限を過ぎていますが、まだ「返却済み」になっていません。速やかに返却手続きをお願いします。`;
-              break;
-            case '1day':
-              subject = '【KASANE】リマインド：明日、端末の返却予定日です';
-              body = `${record.userName} 様、現在貸出中の端末の返却予定日が明日に迫っています。忘れずにご準備ください。`;
-              break;
+          if (type === '1day_before') {
+            subject = '【KASANE】返却予定日の1営業日前リマインド';
+            body = `お疲れ様です。\nICTです。\n\n返却予定日の1営前となりました。\n返却予定日に返せるよう端末と充電器の確認をしてください。\nまた、ログインした場合は必ずログアウトを行い、ダウンロードしたアプリなどは必ず削除してください。\n※なお返却予定日を延長される場合は返却予定日の変更を行ってください。`;
+          } else if (type === '1day_after') {
+            subject = '【KASANE】至急：返却期限超過のお知らせ（1営業日経過）';
+            body = `お疲れ様です。\nICTです。\n\n返却予定日を1営業日過ぎおります。\nこの後も利用される方が控えておりますので必ず本日中に返却願います。\nなお返却が難しい場合は返却予定日を返却可能な日付に変更してください。`;
           }
           
-          console.log(`%c[Automatic Notification Log]`, "color: #4f46e5; font-weight: bold", {
-            Recipient: email,
-            StaffID: record.employeeId,
-            Subject: subject,
-            Message: body,
-            Status: "Unreturned (Active)"
-          });
+          // シミュレーション: ブラウザコンソールへ送信ログを出力
+          console.group(`%c[Email Sent: ${type}]`, "color: #4f46e5; font-weight: bold; background: #e0e7ff; padding: 2px 4px; border-radius: 4px;");
+          console.log(`To: ${record.userName} <${email}>`);
+          console.log(`Subject: ${subject}`);
+          console.log(`Message:\n${body}`);
+          console.groupEnd();
           
           updated = true;
           return { ...record, remindersSent: [...sent, type] };
@@ -120,7 +124,7 @@ const App: React.FC = () => {
       }
     };
 
-    const timer = setTimeout(checkAndSendReminders, 1500);
+    const timer = setTimeout(checkAndSendReminders, 2000);
     return () => clearTimeout(timer);
   }, [lendingRecords]);
 
@@ -129,7 +133,6 @@ const App: React.FC = () => {
     return devices.filter(d => d.category === selectedCategory);
   }, [selectedCategory, devices]);
 
-  // 利用可能台数と登録台数の計算
   const deviceCounts = useMemo(() => {
     const total = filteredDevices.length;
     const available = filteredDevices.filter(d => d.status === 'available').length;
@@ -147,10 +150,8 @@ const App: React.FC = () => {
 
     const oldDate = device.returnDate;
 
-    // 端末の状態を更新
     setDevices(prev => prev.map(d => d.id === deviceId ? { ...d, returnDate: newDate } : d));
     
-    // 貸出履歴を更新（最新のactiveなレコードを対象にする）
     setLendingRecords(prev => {
       const newRecords = [...prev];
       const recordIndex = [...newRecords].reverse().findIndex(r => r.deviceId === deviceId && r.status === 'active');
@@ -159,13 +160,12 @@ const App: React.FC = () => {
         newRecords[actualIndex] = { 
           ...newRecords[actualIndex], 
           expectedReturnDate: newDate,
-          remindersSent: [] // 日付が変わったので通知フラグをリセット
+          remindersSent: [] // 日付が更新されたら通知履歴をリセット
         };
       }
       return newRecords;
     });
 
-    // ログを追加
     addHistoryLog(
       deviceId, 
       device.deviceNumber, 
@@ -181,6 +181,9 @@ const App: React.FC = () => {
   const handleReturn = (deviceId: string) => {
     const device = devices.find(d => d.id === deviceId);
     if (!device) return;
+
+    const performerName = isAdmin ? '管理者' : (loggedInUser?.name || '不明');
+    const performerId = isAdmin ? 'ADMIN' : (loggedInUser?.id || '不明');
 
     setDevices(prev => prev.map(d => 
       d.id === deviceId 
@@ -198,13 +201,12 @@ const App: React.FC = () => {
       return newRecords;
     });
 
-    // ログを追加
     addHistoryLog(
       deviceId, 
       device.deviceNumber, 
       'return', 
-      device.currentUser || '不明', 
-      device.currentEmployeeId || '不明'
+      performerName, 
+      performerId
     );
   };
 
@@ -234,7 +236,6 @@ const App: React.FC = () => {
         : d
     ));
 
-    // ログを追加
     addHistoryLog(
       selectedDevice.id, 
       selectedDevice.deviceNumber, 
@@ -245,11 +246,6 @@ const App: React.FC = () => {
     );
 
     setSelectedDevice(null);
-  };
-
-  const handleToggleAdmin = () => {
-    setIsAdmin(!isAdmin);
-    setSelectedCategory(null);
   };
 
   const handleAddDevice = (category: CategoryType, number: string, details: { assetId?: string, phoneNumber?: string, location?: string }) => {
@@ -274,9 +270,16 @@ const App: React.FC = () => {
     }
   };
 
+  if (!loggedInUser && !isAdmin) {
+    return <LoginScreen 
+      onUserLogin={(staff) => setLoggedInUser(staff)} 
+      onAdminLogin={() => setIsAdmin(true)} 
+    />;
+  }
+
   return (
     <div className="min-h-screen pb-20">
-      <Header onAdminToggle={handleToggleAdmin} isAdmin={isAdmin} />
+      <Header isAdmin={isAdmin} loggedInUser={loggedInUser} onLogout={handleLogout} />
       
       <main className="max-w-5xl mx-auto py-8">
         {isAdmin ? (
@@ -291,8 +294,8 @@ const App: React.FC = () => {
         ) : !selectedCategory ? (
           <>
             <div className="px-6 mb-8">
-              <h2 className="text-3xl font-bold text-slate-900 tracking-tight">端末カテゴリーを選択</h2>
-              <p className="text-slate-500 mt-2">利用したい端末の種類を選んでください。</p>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight">端末カテゴリーを選択</h2>
+              <p className="text-slate-500 mt-2 font-medium">利用したい端末の種類を選んでください。</p>
             </div>
             <CategoryGrid onSelect={setSelectedCategory} />
           </>
@@ -300,14 +303,14 @@ const App: React.FC = () => {
           <div className="px-6 animate-in slide-in-from-right duration-300">
             <button 
               onClick={() => setSelectedCategory(null)}
-              className="flex items-center gap-2 text-indigo-600 font-semibold mb-6 hover:translate-x-[-4px] transition-transform"
+              className="flex items-center gap-2 text-indigo-600 font-bold mb-6 hover:translate-x-[-4px] transition-transform"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
               戻る
             </button>
             
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-3xl font-bold text-slate-900">{selectedCategory}</h2>
+              <h2 className="text-3xl font-black text-slate-900">{selectedCategory}</h2>
               <div className="text-right">
                 <div className="bg-slate-100 px-4 py-2 rounded-2xl border border-slate-200 shadow-sm inline-block">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">利用可能 / 登録</span>
@@ -351,7 +354,7 @@ const App: React.FC = () => {
                         <div className="flex flex-col mt-1">
                           <span className="text-sm text-slate-500 font-bold">{device.currentUser}</span>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-xs text-rose-500 font-semibold uppercase">返却予定: {device.returnDate}</span>
+                            <span className="text-xs text-rose-500 font-bold uppercase tracking-wide">返却予定: {device.returnDate}</span>
                             <button 
                               onClick={() => setEditingDateDevice(device)}
                               className="text-slate-300 hover:text-indigo-500 transition-colors p-0.5"
@@ -363,10 +366,10 @@ const App: React.FC = () => {
                         </div>
                       )}
                       {device.status === 'returned' && (
-                        <span className="text-sm text-amber-600 font-semibold uppercase mt-1 inline-block">返却済み (点検中)</span>
+                        <span className="text-sm text-amber-600 font-bold uppercase mt-1 inline-block">返却済み (点検中)</span>
                       )}
                       {device.status === 'available' && (
-                        <span className="text-sm text-green-600 font-semibold uppercase mt-1 inline-block">利用可能</span>
+                        <span className="text-sm text-green-600 font-bold uppercase mt-1 inline-block">利用可能</span>
                       )}
                     </div>
                   </div>

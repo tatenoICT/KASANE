@@ -46,18 +46,9 @@ export const INITIAL_DEVICES: Device[] = [
     category: 'iPhone', 
     deviceNumber: 'IPHONE-001', 
     status: 'available',
-    lendingCount: 0,
-    assetId: 'PH-001',
-    location: '貸出ロッカー B-1'
-  },
-  { 
-    id: 'iphone-02', 
-    category: 'iPhone', 
-    deviceNumber: 'IPHONE-002', 
-    status: 'available',
-    lendingCount: 0,
-    assetId: 'PH-002',
-    location: '貸出ロッカー B-2'
+    lendingCount: 5,
+    assetId: 'PHN-001',
+    location: 'ロッカー04'
   },
   { 
     id: 'pc-01', 

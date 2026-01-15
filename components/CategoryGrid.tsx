@@ -15,17 +15,17 @@ const CATEGORIES_DATA: { type: CategoryType; icon: React.ReactNode; color: strin
     )
   },
   { 
-    type: 'iPad', 
-    color: 'bg-indigo-500', 
-    icon: (
-      <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-    )
-  },
-  { 
     type: 'iPhone', 
     color: 'bg-rose-500', 
     icon: (
       <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M9 21h6a2 2 0 002-2V5a2 2 0 00-2-2H9a2 2 0 00-2 2v14a2 2 0 002 2zM10 5h4"></path></svg>
+    )
+  },
+  { 
+    type: 'iPad', 
+    color: 'bg-indigo-500', 
+    icon: (
+      <svg className="w-6 h-6 md:w-8 md:h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
     )
   },
   { 
@@ -49,14 +49,12 @@ const CATEGORIES_DATA: { type: CategoryType; icon: React.ReactNode; color: strin
 
 const CategoryGrid: React.FC<CategoryGridProps> = ({ onSelect }) => {
   return (
-    <div className="grid grid-cols-2 gap-4 md:gap-6 p-4 md:p-6">
-      {CATEGORIES_DATA.map((cat, index) => (
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 p-4 md:p-6">
+      {CATEGORIES_DATA.map((cat) => (
         <button
           key={cat.type}
           onClick={() => onSelect(cat.type)}
-          className={`group relative bg-white p-6 md:p-10 rounded-2xl md:rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 flex flex-col items-center text-center overflow-hidden ${
-            index === CATEGORIES_DATA.length - 1 && CATEGORIES_DATA.length % 2 !== 0 ? 'col-span-2 sm:col-span-1' : ''
-          }`}
+          className="group relative bg-white p-6 md:p-10 rounded-2xl md:rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100 flex flex-col items-center text-center overflow-hidden"
         >
           <div className={`mb-4 md:mb-6 p-3 md:p-4 rounded-xl md:rounded-2xl ${cat.color} text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
             {cat.icon}

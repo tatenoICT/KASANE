@@ -10,13 +10,17 @@ interface LendingModalProps {
 }
 
 const LendingModal: React.FC<LendingModalProps> = ({ device, onClose, onSubmit }) => {
+  // Try to find the currently logged user from localStorage to pre-fill
+  const savedUserStr = localStorage.getItem('kasane_logged_user');
+  const loggedUser: Staff | null = savedUserStr ? JSON.parse(savedUserStr) : null;
+
   const [formData, setFormData] = useState({
-    employeeId: '',
+    employeeId: loggedUser?.id || '',
     startDate: new Date().toISOString().split('T')[0],
     expectedReturnDate: '',
     reason: '',
   });
-  const [foundStaff, setFoundStaff] = useState<Staff | null>(null);
+  const [foundStaff, setFoundStaff] = useState<Staff | null>(loggedUser);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -26,16 +30,35 @@ const LendingModal: React.FC<LendingModalProps> = ({ device, onClose, onSubmit }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 1. バリデーション
     if (!foundStaff) {
-      alert('有効な社員番号を入力してください');
+      window.alert('有効な社員番号を入力してください');
       return;
     }
+
+    if (!formData.expectedReturnDate || !formData.reason) {
+      window.alert('全ての項目を入力してください');
+      return;
+    }
+
+    // 2. カテゴリー判定とアラート表示
+    // PC または その他周辺機器 の場合にアラートを表示する
+    const currentCategory = device.category;
+    if (currentCategory === 'PC' || currentCategory === 'その他周辺機器') {
+      // 利用者がOKを押すまで次のコードは実行されません
+      window.alert('ICTが直接管理しているものになります。\n　ICT部門にお声かけください');
+    }
+
+    // 3. 送信処理（alertが表示された場合、OKをクリックした後に実行される）
     setSubmitting(true);
+    
     onSubmit({
       ...formData,
       userName: foundStaff.name,
       userEmail: foundStaff.email,
     });
+    
     setSubmitting(false);
   };
 
@@ -47,12 +70,12 @@ const LendingModal: React.FC<LendingModalProps> = ({ device, onClose, onSubmit }
             <span className="text-[10px] font-black uppercase tracking-widest opacity-70">Application for Use</span>
             <h3 className="text-xl md:text-2xl font-black">{device.deviceNumber}</h3>
           </div>
-          <button onClick={onClose} className="hover:bg-white/20 rounded-full p-2 transition-colors">
+          <button onClick={onClose} className="hover:bg-white/20 rounded-full p-2 transition-colors" type="button">
             <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
         
-        <div className="px-6 md:px-8 pt-4 md:pt-6 pb-1 md:pb-2">
+        <div className="px-6 md:px-8 pt-4 md:pt-6 pb-1 md:pb-2 space-y-3">
             <div className="bg-indigo-50/50 p-3 md:p-4 rounded-xl md:rounded-2xl flex items-center gap-3 md:gap-4 border border-indigo-100/50">
                 <div className="bg-white p-2 md:p-2.5 rounded-lg md:rounded-xl shadow-sm shrink-0">
                     <svg className="w-4 h-4 md:w-5 md:h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>

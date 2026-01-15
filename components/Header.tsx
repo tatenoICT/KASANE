@@ -1,12 +1,14 @@
 
 import React from 'react';
+import { Staff } from '../types';
 
 interface HeaderProps {
-  onAdminToggle: () => void;
   isAdmin: boolean;
+  loggedInUser: Staff | null;
+  onLogout: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ onAdminToggle, isAdmin }) => {
+const Header: React.FC<HeaderProps> = ({ isAdmin, loggedInUser, onLogout }) => {
   return (
     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200">
       <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -21,22 +23,28 @@ const Header: React.FC<HeaderProps> = ({ onAdminToggle, isAdmin }) => {
             </p>
           </div>
         </div>
+        
         <div className="flex items-center gap-4">
+          <div className="hidden md:block text-right">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Signed in as</p>
+            <p className="text-sm font-bold text-slate-800 leading-none">
+              {isAdmin ? 'Administrator' : loggedInUser?.name}
+            </p>
+          </div>
+          
           <button 
-            onClick={onAdminToggle}
-            className={`text-xs font-bold transition-all uppercase tracking-widest border rounded-full px-4 py-1.5 ${
-              isAdmin 
-                ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800' 
-                : 'text-slate-400 border-slate-100 hover:text-indigo-600 hover:bg-slate-50'
-            }`}
+            onClick={onLogout}
+            className="flex items-center gap-2 text-xs font-bold text-slate-400 border border-slate-100 rounded-full px-4 py-1.5 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all"
           >
-            {isAdmin ? 'Exit Admin' : 'Admin Access'}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+            <span className="hidden sm:inline">Logout</span>
           </button>
-          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 overflow-hidden">
+
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center border border-slate-200 overflow-hidden shadow-sm ${isAdmin ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
             {isAdmin ? (
-              <div className="bg-indigo-600 w-full h-full flex items-center justify-center text-white text-xs font-bold">ADM</div>
+              <span className="text-xs font-bold">ADM</span>
             ) : (
-              <span className="text-sm font-bold text-slate-600">JD</span>
+              <span className="text-sm font-bold">{loggedInUser?.name.charAt(0)}</span>
             )}
           </div>
         </div>
