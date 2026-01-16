@@ -8,7 +8,6 @@ import LendingModal from './components/LendingModal';
 import EditReturnDateModal from './components/EditReturnDateModal';
 import AdminDashboard from './components/AdminDashboard';
 import LoginScreen from './components/LoginScreen';
-import { processReminders } from './services/reminderService';
 
 const App: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType | null>(null);
@@ -56,7 +55,7 @@ const App: React.FC = () => {
     localStorage.setItem('kasane_logged_user', JSON.stringify(loggedInUser));
   }, [devices, lendingRecords, historyLogs, isAdmin, loggedInUser, isInitialized]);
 
-  // Fix: Add filteredDevices and deviceCounts computed values
+  // Compute filtered devices and counts
   const filteredDevices = useMemo(() => {
     if (!selectedCategory) return [];
     return devices.filter(d => d.category === selectedCategory);
@@ -89,41 +88,14 @@ const App: React.FC = () => {
     setHistoryLogs(prev => [...prev, newLog]);
   };
 
-  /**
-   * リマインド一括チェック実行
-   */
-  const handleRunReminders = async () => {
-    const result = await processReminders(lendingRecords);
-    if (result.sentCount > 0) {
-      setLendingRecords(result.updatedRecords);
-      
-      // 送信履歴をログに追加
-      result.updatedRecords.forEach(record => {
-        // 直近で追加されたリマインドがあるか確認 (簡易的な判定)
-        const oldRecord = lendingRecords.find(r => r.id === record.id);
-        if (oldRecord && oldRecord.remindersSent.length < record.remindersSent.length) {
-          const newType = record.remindersSent[record.remindersSent.length - 1];
-          const device = devices.find(d => d.id === record.deviceId);
-          addHistoryLog(
-            record.deviceId,
-            device?.deviceNumber || '不明',
-            'reminder_sent',
-            record.userName,
-            record.employeeId,
-            `${newType === '1day_before' ? '1営業日前' : '1営業日後'}リマインド送信済`
-          );
-        }
-      });
-      return result.sentCount;
-    }
-    return 0;
-  };
-
   const handleRequestUse = (device: Device) => {
     if (device.status !== 'available') return;
+    
+    // PCまたはその他周辺機器の場合のみ、指定された文言のアラートを表示
     if (device.category === 'PC' || device.category === 'その他周辺機器') {
-      window.alert('ICTにて貸出管理をしているので\n利用申請後ICT担当者にお声かけください。');
+      window.alert('ICTが管理しています。ICTにお声かけください');
     }
+    
     setSelectedDevice(device);
   };
 
@@ -226,7 +198,6 @@ const App: React.FC = () => {
             onDeleteDevice={handleDeleteDevice}
             onBackToUser={() => setIsAdmin(false)}
             onCompleteInspection={handleCompleteInspection}
-            onRunReminders={handleRunReminders}
           />
         ) : !selectedCategory ? (
           <>
@@ -240,7 +211,7 @@ const App: React.FC = () => {
           <div className="px-6 animate-in slide-in-from-right duration-300">
             <button onClick={() => setSelectedCategory(null)} className="flex items-center gap-2 text-indigo-600 font-bold mb-6 hover:translate-x-[-4px] transition-transform">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-              戻る
+              カテゴリー選択へ戻る
             </button>
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-3xl font-black text-slate-900">{selectedCategory}</h2>
@@ -258,7 +229,6 @@ const App: React.FC = () => {
                 <div key={device.id} className={`bg-white p-6 rounded-2xl border ${device.status !== 'available' ? 'border-slate-100 opacity-80' : 'border-slate-200 shadow-sm'} flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 transition-all hover:shadow-md`}>
                   <div className="flex items-center gap-4">
                     <div className={`p-4 rounded-xl ${device.status === 'available' ? 'bg-indigo-50 text-indigo-600' : device.status === 'returned' ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>
-                      {/* アイコンはそのまま */}
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {selectedCategory === 'Wi-Fi' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path>}
                         {selectedCategory === 'iPad' && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>}

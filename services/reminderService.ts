@@ -2,7 +2,6 @@
 import { LendingRecord, EmailPayload } from "../types";
 import { isExactlyOneBusinessDayBefore, isExactlyOneBusinessDayAfter } from "../utils/holidayUtils";
 import { sendReminderEmail } from "./emailService";
-import { STAFF_DIRECTORY } from "../constants";
 
 /**
  * サーバーサイド・バッチ処理のコアロジック。
@@ -16,11 +15,6 @@ export const processReminders = async (records: LendingRecord[]): Promise<{ upda
     const record = updatedRecords[i];
     if (record.status !== 'active') continue;
 
-    // 最新の名簿から社員情報を取得（紐付け）
-    const staffInfo = STAFF_DIRECTORY.find(s => s.id === record.employeeId);
-    const targetEmail = staffInfo ? staffInfo.email : record.userEmail;
-    const businessName = staffInfo ? staffInfo.name : record.userName;
-
     const isBefore = isExactlyOneBusinessDayBefore(record.expectedReturnDate);
     const isAfter = isExactlyOneBusinessDayAfter(record.expectedReturnDate);
 
@@ -29,10 +23,10 @@ export const processReminders = async (records: LendingRecord[]): Promise<{ upda
     else if (isAfter && !record.remindersSent.includes('1day_after')) type = '1day_after';
 
     if (type) {
-      const greeting = `${businessName} 様\n\nお疲れ様です。ICTです。\n\n`;
+      const greeting = `${record.userName} 様\n\nお疲れ様です。ICTです。\n\n`;
       
       const payload: EmailPayload = {
-        to: targetEmail,
+        to: record.userEmail,
         type: type,
         subject: type === '1day_before' ? '【KASANE】返却予定日の1営業日前リマインド' : '【KASANE】至急：返却期限超過のお知らせ（1営業日経過）',
         body: type === '1day_before' 

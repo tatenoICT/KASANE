@@ -2,10 +2,10 @@
 import { Device, Staff } from './types';
 
 export const STAFF_DIRECTORY: Staff[] = [
-  { id: '3669', name: '辻 大輔', email: 'd.tsuji@amana.jp' },
-  { id: '3700', name: '齋藤 航輝', email: 'kaz.saito@amana.jp' },
-  { id: '3738', name: '立野 春華', email: 'h.tateno@amana.jp' },
-  { id: '2342', name: '橋間 司', email: 't.hashima@amana.jp' },
+  { id: '1234', name: '山田 太郎', email: 'yamada@example.com' },
+  { id: '5678', name: '佐藤 花子', email: 'sato@example.com' },
+  { id: '3738', name: '立野 春華', email: 'tateno@example.com' },
+  { id: '9999', name: '管理者 太郎', email: 'admin@example.com' },
 ];
 
 export const INITIAL_DEVICES: Device[] = [
